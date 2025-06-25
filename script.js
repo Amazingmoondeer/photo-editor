@@ -1,282 +1,202 @@
-const upload = document.getElementById("upload");
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
-
-const brightness = document.getElementById("brightness");
-const contrast = document.getElementById("contrast");
-const grayscale = document.getElementById("grayscale");
-const sepia = document.getElementById("sepia");
-const blur = document.getElementById("blur");
-
-const rotateLeftBtn = document.getElementById("rotate-left");
-const rotateRightBtn = document.getElementById("rotate-right");
-
-const startCropBtn = document.getElementById("start-crop");
-const applyCropBtn = document.getElementById("apply-crop");
-const cancelCropBtn = document.getElementById("cancel-crop");
-
-const textInput = document.getElementById("text-input");
-const addTextBtn = document.getElementById("add-text-btn");
-
-const downloadBtn = document.getElementById("download");
-
-let img = new Image();
-let imgAngle = 0;
-let originalImageData = null;
-
-let cropMode = false;
-let cropStart = null;
-let cropEnd = null;
-
-let textItems = [];
-
-function resetCanvasSize(width, height) {
-  canvas.width = width;
-  canvas.height = height;
-}
-
-function drawImage() {
-  // Clear canvas
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // Save context to handle rotation
-  ctx.save();
-
-  // Translate to center for rotation
-  ctx.translate(canvas.width / 2, canvas.height / 2);
-  ctx.rotate((imgAngle * Math.PI) / 180);
-
-  // Draw image centered
-  ctx.drawImage(img, -img.width / 2, -img.height / 2);
-
-  ctx.restore();
-
-  applyFilters();
-
-  drawTexts();
-
-  if (cropMode && cropStart && cropEnd) {
-    drawCropRect();
-  }
-}
-
-function applyFilters() {
-  const filterStr = `
-    brightness(${brightness.value}%)
-    contrast(${contrast.value}%)
-    grayscale(${grayscale.value}%)
-    sepia(${sepia.value}%)
-    blur(${blur.value}px)
-  `;
-
-  // Save current image data, apply filter, redraw
-  ctx.filter = filterStr.trim();
-
-  // Re-draw the image on top with filters (to make filters visible)
-  // Trick: Clear and redraw filtered image
-
-  // Save canvas as temp
-  let tempCanvas = document.createElement("canvas");
-  let tempCtx = tempCanvas.getContext("2d");
-  tempCanvas.width = canvas.width;
-  tempCanvas.height = canvas.height;
-
-  // Draw rotated image without filters to temp canvas
-  tempCtx.save();
-  tempCtx.translate(tempCanvas.width / 2, tempCanvas.height / 2);
-  tempCtx.rotate((imgAngle * Math.PI) / 180);
-  tempCtx.drawImage(img, -img.width / 2, -img.height / 2);
-  tempCtx.restore();
-
-  // Clear main canvas and apply filter, then draw temp canvas on it
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.filter = filterStr.trim();
-  ctx.drawImage(tempCanvas, 0, 0);
-}
-
-function drawTexts() {
-  textItems.forEach(item => {
-    ctx.font = `${item.fontSize}px Arial`;
-    ctx.fillStyle = item.color;
-    ctx.textBaseline = "top";
-    ctx.fillText(item.text, item.x, item.y);
-  });
-}
-
-function drawCropRect() {
-  const rectX = Math.min(cropStart.x, cropEnd.x);
-  const rectY = Math.min(cropStart.y, cropEnd.y);
-  const rectW = Math.abs(cropEnd.x - cropStart.x);
-  const rectH = Math.abs(cropEnd.y - cropStart.y);
-
-  ctx.save();
-  ctx.strokeStyle = "red";
-  ctx.lineWidth = 2;
-  ctx.setLineDash([6]);
-  ctx.strokeRect(rectX, rectY, rectW, rectH);
-  ctx.restore();
-}
-
-upload.addEventListener("change", e => {
-  if (!e.target.files.length) return;
-
-  const file = e.target.files[0];
-  const reader = new FileReader();
-
-  reader.onload = function (event) {
-    img = new Image();
-    img.onload = () => {
-      imgAngle = 0;
-      resetCanvasSize(img.width, img.height);
-      drawImage();
-    };
-    img.src = event.target.result;
-  };
-
-  reader.readAsDataURL(file);
-});
-
-[brightness, contrast, grayscale, sepia, blur].forEach(input => {
-  input.addEventListener("input", () => {
-    drawImage();
-  });
-});
-
-rotateLeftBtn.addEventListener("click", () => {
-  imgAngle = (imgAngle - 90) % 360;
-
-  // Adjust canvas size for 90° or 270° rotation
-  if (imgAngle % 180 !== 0) {
-    resetCanvasSize(img.height, img.width);
-  } else {
-    resetCanvasSize(img.width, img.height);
-  }
-  drawImage();
-});
-
-rotateRightBtn.addEventListener("click", () => {
-  imgAngle = (imgAngle + 90) % 360;
-  if (imgAngle % 180 !== 0) {
-    resetCanvasSize(img.height, img.width);
-  } else {
-    resetCanvasSize(img.width, img.height);
-  }
-  drawImage();
-});
-
-startCropBtn.addEventListener("click", () => {
-  if (!img.src) return alert("Upload an image first");
-  cropMode = true;
-  cropStart = null;
-  cropEnd = null;
-  applyCropBtn.disabled = false;
-  cancelCropBtn.disabled = false;
-  startCropBtn.disabled = true;
-  canvas.style.cursor = "crosshair";
-});
-
-cancelCropBtn.addEventListener("click", () => {
-  cropMode = false;
-  cropStart = null;
-  cropEnd = null;
-  applyCropBtn.disabled = true;
-  cancelCropBtn.disabled = true;
-  startCropBtn.disabled = false;
-  canvas.style.cursor = "default";
-  drawImage();
-});
-
-applyCropBtn.addEventListener("click", () => {
-  if (!cropStart || !cropEnd) {
-    alert("Select crop area first");
-    return;
-  }
-
-  const x = Math.min(cropStart.x, cropEnd.x);
-  const y = Math.min(cropStart.y, cropEnd.y);
-  const w = Math.abs(cropEnd.x - cropStart.x);
-  const h = Math.abs(cropEnd.y - cropStart.y);
-
-  if (w === 0 || h === 0) {
-    alert("Invalid crop area");
-    return;
-  }
-
-  // Create temp canvas and draw cropped image
-  let tempCanvas = document.createElement("canvas");
-  let tempCtx = tempCanvas.getContext("2d");
-  tempCanvas.width = w;
-  tempCanvas.height = h;
-
-  // Copy cropped area from main canvas
-  tempCtx.drawImage(canvas, x, y, w, h, 0, 0, w, h);
-
-  // Update main canvas size and image
-  canvas.width = w;
-  canvas.height = h;
-  ctx.clearRect(0, 0, w, h);
-  ctx.drawImage(tempCanvas, 0, 0);
-
-  // Update img with new cropped image data
-  img.src = canvas.toDataURL();
-
-  cropMode = false;
-  cropStart = null;
-  cropEnd = null;
-  applyCropBtn.disabled = true;
-  cancelCropBtn.disabled = true;
-  startCropBtn.disabled = false;
-  canvas.style.cursor = "default";
-
-  // Clear text overlays after crop
-  textItems = [];
-});
-
-let isDraggingText = false;
-let draggedTextIndex = null;
-let dragOffset = { x: 0, y: 0 };
-
-canvas.addEventListener("mousedown", e => {
-  if (cropMode) return; // disable text dragging while cropping
-
-  const mousePos = getMousePos(canvas, e);
-
-  // Check if clicking on any text item
-  for (let i = 0; i < textItems.length; i++) {
-    const text = textItems[i];
-    ctx.font = `${text.fontSize}px Arial`;
-    const width = ctx.measureText(text.text).width;
-    const height = text.fontSize;
-
-    if (
-      mousePos.x >= text.x &&
-      mousePos.x <= text.x + width &&
-      mousePos.y >= text.y &&
-      mousePos.y <= text.y + height
-    ) {
-      isDraggingText = true;
-      draggedTextIndex = i;
-      dragOffset.x = mousePos.x - text.x;
-      dragOffset.y = mousePos.y - text.y;
-      canvas.style.cursor = "move";
-      break;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Advanced Photo Editor v2</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; background: #f2f2f2; }
+    #wrapper { position: relative; display: inline-block; }
+    canvas { border: 1px solid #999; }
+    .overlay {
+      position: absolute; cursor: move; user-select: none;
     }
+    #textOverlay { font-size: 24px; color: white; text-shadow: 1px 1px 2px black; }
+    .sticker { width: 50px; height: 50px; }
+    #stickersPanel img { margin: 5px; cursor: grab; }
+    #cropRect {
+      position: absolute; border: 2px dashed #00f;
+      background: rgba(0,0,255,0.1);
+      display: none;
+    }
+    .controls button { margin: 5px; }
+  </style>
+</head>
+<body>
+  <h1>High‑End Photo Editor</h1>
+  <input type="file" id="upload" accept="image/*"><br/><br/>
+  <div id="wrapper">
+    <canvas id="canvas"></canvas>
+    <div id="textOverlay" class="overlay" contenteditable="true">Edit me</div>
+    <div id="cropRect"></div>
+  </div>
+  <br/>
+  <div class="controls">
+    <button onclick="startCrop()">Crop</button>
+    <button onclick="applyCrop()">Apply Crop</button>
+    <button onclick="addSticker('⭐')">Add ⭐</button>
+    <button onclick="undo()">Undo</button>
+    <button onclick="redo()">Redo</button>
+    <button onclick="download()">Download</button>
+  </div>
+  <div id="stickersPanel">
+    <h3>Stickers</h3>
+    <img src="https://twemoji.maxcdn.com/v/14.0.2/72x72/1f60d.png" draggable="true">
+    <img src="https://twemoji.maxcdn.com/v/14.0.2/72x72/1f602.png" draggable="true">
+  </div>
+
+<script>
+const canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
+const textEl = document.getElementById('textOverlay'), cropRect = document.getElementById('cropRect');
+const wrapper = document.getElementById('wrapper'), stickersPanel = document.getElementById('stickersPanel');
+let img = new Image(), angle=0, scale=1, history=[], historyIndex=-1;
+
+// Setup upload
+document.getElementById('upload').onchange = e => {
+  const fr = new FileReader();
+  fr.onload = ev => {
+    img.onload = () => {
+      canvas.width = img.width; canvas.height = img.height;
+      saveState(); draw();
+    }
+    img.src = ev.target.result;
   }
+  fr.readAsDataURL(e.target.files[0]);
+}
+
+// Draw everything
+function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.save();
+  ctx.translate(canvas.width/2,canvas.height/2);
+  ctx.rotate(angle*Math.PI/180);
+  ctx.scale(scale,scale);
+  ctx.drawImage(img,-img.width/2,-img.height/2);
+  ctx.restore();
+  drawText(); drawStickers();
+}
+
+// Text overlay
+function drawText() {
+  const rC = canvas.getBoundingClientRect(), rT=textEl.getBoundingClientRect();
+  const x = rT.left - rC.left, y = rT.top - rC.top + parseInt(getComputedStyle(textEl).fontSize);
+  ctx.font = getComputedStyle(textEl).font;
+  ctx.fillStyle = getComputedStyle(textEl).color;
+  ctx.fillText(textEl.textContent, x,y);
+}
+
+// Stickers data
+let stickers = [];
+function drawStickers() {
+  const rC = canvas.getBoundingClientRect();
+  stickers.forEach(s => {
+    ctx.drawImage(s.img, s.x - rC.left, s.y - rC.top, 50,50);
+  });
+}
+
+// Undo/redo
+function saveState() {
+  history = history.slice(0, historyIndex+1);
+  history.push(canvas.toDataURL());
+  historyIndex++;
+}
+function undo() {
+  if (historyIndex>0) { historyIndex--; loadState(); }
+}
+function redo() {
+  if (historyIndex<history.length-1) { historyIndex++; loadState(); }
+}
+function loadState() {
+  const im = new Image();
+  im.onload = () => { canvas.width=im.width; canvas.height=im.height; ctx.drawImage(im,0,0); }
+  im.src = history[historyIndex];
+}
+
+// Cropping
+let cropping=false, startX, startY;
+function startCrop() {
+  cropRect.style.display='block';
+  cropRect.style.cursor='crosshair';
+  cropRect.onmousedown = e => {
+    cropping=true; startX=e.offsetX; startY=e.offsetY;
+    cropRect.style.left=startX+'px'; cropRect.style.top=startY+'px';
+    cropRect.style.width='0px'; cropRect.style.height='0px';
+  };
+  wrapper.onmousemove = e => {
+    if (cropping) {
+      cropRect.style.width = e.offsetX - startX + 'px';
+      cropRect.style.height = e.offsetY - startY + 'px';
+    }
+  };
+  document.onmouseup = e => { cropping=false; wrapper.onmousemove=null; }
+}
+
+function applyCrop() {
+  const r = cropRect.getBoundingClientRect(), w=r.width, h=r.height, cR=canvas.getBoundingClientRect();
+  const imgData = ctx.getImageData(r.left - cR.left, r.top - cR.top, w, h);
+  canvas.width=w; canvas.height=h;
+  ctx.putImageData(imgData,0,0);
+  cropRect.style.display='none';
+  saveState();
+}
+
+// Add stickers or emojis
+function addSticker(char) {
+  const span = document.createElement('span'); span.textContent = char;
+  span.className='overlay sticker';
+  span.style.left='10px'; span.style.top='60px';
+  wrapper.appendChild(span);
+  makeDrag(span);
+}
+function makeDrag(el) {
+  el.onmousedown = e => {
+    const ox=e.offsetX, oy=e.offsetY;
+    document.onmousemove = ev => {
+      el.style.left = ev.pageX - wrapper.getBoundingClientRect().left - ox + 'px';
+      el.style.top = ev.pageY - wrapper.getBoundingClientRect().top - oy + 'px';
+    };
+    document.onmouseup = () => {
+      document.onmousemove=null;
+      saveState();
+    };
+  };
+}
+
+// Sticker panel drag
+stickersPanel.querySelectorAll('img').forEach(imgEl=>{
+  imgEl.ondragstart = e => {
+    e.dataTransfer.setData('text/plain', imgEl.src);
+  };
 });
 
-canvas.addEventListener("mousemove", e => {
-  if (isDraggingText && draggedTextIndex !== null) {
-    const mousePos = getMousePos(canvas, e);
-    textItems[draggedTextIndex].x = mousePos.x - dragOffset.x;
-    textItems[draggedTextIndex].y = mousePos.y - dragOffset.y;
-    drawImage();
-  }
-});
+wrapper.ondragover = e=>{ e.preventDefault(); }
+wrapper.ondrop = e => {
+  e.preventDefault();
+  const src = e.dataTransfer.getData('text');
+  const imgEl = new Image();
+  imgEl.src = src;
+  imgEl.onload = () => {
+    const span=document.createElement('img');
+    span.src = src;
+    span.className='overlay sticker';
+    span.style.left=e.offsetX+'px'; span.style.top=e.offsetY+'px';
+    wrapper.appendChild(span);
+    makeDrag(span);
+    stickers.push({img: imgEl, x: e.pageX, y: e.pageY});
+    saveState();
+  };
+};
 
-canvas.addEventListener("mouseup", e => {
-  isDraggingText = false;
-  draggedTextIndex = null;
-  canvas.style.cursor = cropMode ? "crosshair" : "default";
-});
+// Download final image
+function download(){
+  saveState();
+  const link = document.createElement('a');
+  link.download='edited.png';
+  link.href=canvas.toDataURL();
+  link.click();
+}
 
-canvas.addEvent
+// Enable dragging of text overlay
+makeDrag(textEl);
+</script>
+</body>
+</html>
