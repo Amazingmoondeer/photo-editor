@@ -1,33 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Advanced Photo Editor</title>
   <style>
-    body { font-family: sans-serif; padding: 20px; background: #fafafa; }
-    canvas { border: 1px solid #ccc; display: block; margin: 10px 0; max-width: 100%; }
-    #controls > * { margin: 5px; }
-    .text-box {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      font-size: 24px;
-      color: red;
-      cursor: move;
-      user-select: none;
+    body { font-family: sans-serif; padding: 20px; background: #eee; }
+    #wrapper { position: relative; display: inline-block; border: 1px solid #ccc; }
+    canvas { display: block; }
+    #textOverlay {
+      position: absolute; top: 10px; left: 10px;
+      font-size: 24px; color: white; cursor: move;
+      user-select: none; text-shadow: 1px 1px 2px black;
     }
-    #editorWrapper { position: relative; display: inline-block; }
+    .controls > * { margin: 5px; }
   </style>
 </head>
 <body>
   <h1>Advanced Photo Editor</h1>
   <input type="file" id="upload" accept="image/*"><br/>
-  <div id="editorWrapper">
+  <div id="wrapper">
     <canvas id="canvas"></canvas>
-    <div id="textOverlay" class="text-box" contenteditable="true">Editable text</div>
+    <div id="textOverlay" contenteditable="true">Your Text</div>
   </div>
 
-  <div id="controls">
+  <div class="controls">
     <label>Effect:</label>
     <select id="filter">
       <option value="none">None</option>
@@ -42,11 +38,21 @@
     <button onclick="rotate(90)">Rotate Right</button>
     <button onclick="crop()">Crop Center</button>
 
-    <button onclick="startAnimation()">Start Animation</button>
-    <button onclick="stopAnimation()">Stop Animation</button>
+    <button onclick="startAnim()">Start Animation</button>
+    <button onclick="stopAnim()">Stop Animation</button>
 
-    <button onclick="faceVolume()">Volume (Blur) Face</button>
-    <button onclick="downloadImage()">Download</button>
+    <button onclick="faceBlur()">Face Blur</button>
+
+    <button onclick="zoom(1.2)">Zoom In</button>
+    <button onclick="zoom(0.8)">Zoom Out</button>
+
+    <label>
+      Chroma Key BG:
+      <input type="color" id="chroma" value="#00ff00"/>
+    </label>
+    <button onclick="removeBG()">Remove BG</button>
+
+    <button onclick="download()">Download</button>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
@@ -54,105 +60,118 @@
     const upload = document.getElementById('upload');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
-    const filterSelect = document.getElementById('filter');
-    const textOverlay = document.getElementById('textOverlay');
+    const filterEl = document.getElementById('filter');
+    const textEl = document.getElementById('textOverlay');
     let img = new Image();
-    let angle = 0;
-    let anim = null;
-    let animPhase = 0;
+    let angle = 0, scale = 1;
+    let animId = null, animPhase = 0;
 
-    upload.addEventListener('change', e => {
+    upload.onchange = e => {
       const reader = new FileReader();
       reader.onload = ev => {
-        img.onload = () => initialize();
+        img.onload = init;
         img.src = ev.target.result;
-      };
+      }
       reader.readAsDataURL(e.target.files[0]);
-    });
+    };
 
-    function initialize(){
+    function init() {
+      angle = 0; scale = 1;
       canvas.width = img.width;
       canvas.height = img.height;
-      textOverlay.style.top = '10px';
-      textOverlay.style.left = '10px';
       draw();
     }
 
-    function draw(){
-      ctx.clearRect(0,0,canvas.width,canvas.height);
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.save();
-      ctx.translate(canvas.width/2, canvas.height/2);
+      ctx.translate(canvas.width / 2, canvas.height / 2);
       ctx.rotate(angle * Math.PI/180);
-      ctx.filter = filterSelect.value;
+      ctx.scale(scale, scale);
+      ctx.filter = filterEl.value;
       ctx.drawImage(img, -img.width/2, -img.height/2);
       ctx.restore();
 
-      // Draw overlay text on canvas
-      const rect = textOverlay.getBoundingClientRect();
-      const wrap = canvas.getBoundingClientRect();
-      const x = rect.left - wrap.left;
-      const y = rect.top - wrap.top + parseInt(getComputedStyle(textOverlay).fontSize,10);
-      ctx.font = window.getComputedStyle(textOverlay).font;
-      ctx.fillStyle = window.getComputedStyle(textOverlay).color;
-      ctx.fillText(textOverlay.textContent, x, y);
+      const r = canvas.getBoundingClientRect();
+      const tr = textEl.getBoundingClientRect();
+      const x = tr.left - r.left, y = tr.top - r.top + parseInt(getComputedStyle(textEl).fontSize);
+      ctx.font = getComputedStyle(textEl).font;
+      ctx.fillStyle = getComputedStyle(textEl).color;
+      ctx.fillText(textEl.textContent, x, y);
     }
 
-    filterSelect.onchange = draw;
-    function rotate(deg){ angle = (angle + deg + 360) % 360; draw(); }
-    function crop(){
+    filterEl.onchange = draw;
+
+    function rotate(d) { angle = (angle + d + 360) % 360; draw(); }
+    function crop() {
       const w = canvas.width/2, h = canvas.height/2;
       const data = ctx.getImageData(w/2, h/2, w, h);
       canvas.width = w; canvas.height = h;
-      ctx.putImageData(data, 0,0);
-      draw(); 
-    }
-
-    // Simple animation: pulsing filter
-    function animate(){
-      animPhase += 0.05;
-      filterSelect.value = `brightness(${1 + 0.1 * Math.sin(animPhase)})`;
+      ctx.putImageData(data, 0, 0);
       draw();
-      anim = requestAnimationFrame(animate);
     }
-    function startAnimation(){ if (!anim) animate(); }
-    function stopAnimation(){ cancelAnimationFrame(anim); anim = null; filterSelect.value = 'none'; draw(); }
 
-    // Face volume = blur detected face
-    async function faceVolume(){
+    function animate() {
+      animPhase += 0.05;
+      filterEl.value = `brightness(${1 + 0.1*Math.sin(animPhase)})`;
+      draw();
+      animId = requestAnimationFrame(animate);
+    }
+    function startAnim() { if (!animId) animate(); }
+    function stopAnim() { cancelAnimationFrame(animId); animId = null; filterEl.value = 'none'; draw(); }
+
+    async function faceBlur() {
       await faceapi.nets.tinyFaceDetector.loadFromUri('models/');
-      const detections = await faceapi.detectAllFaces(canvas, new faceapi.TinyFaceDetectorOptions());
-      detections.forEach(d => {
-        const { x, y, width, height } = d.box;
-        const face = ctx.getImageData(x, y, width, height);
-        // blur with off-screen canvas
-        const tmp = document.createElement('canvas');
-        tmp.width = width; tmp.height = height;
-        const tctx = tmp.getContext('2d');
-        tctx.putImageData(face,0,0);
-        tctx.filter = 'blur(10px)';
-        tctx.drawImage(tmp, 0, 0);
-        ctx.drawImage(tmp, x, y);
+      const dets = await faceapi.detectAllFaces(canvas, new faceapi.TinyFaceDetectorOptions());
+      dets.forEach(d => {
+        const {x,y,width,w,h} = d.box;
+        const tmp = ctx.getImageData(x,y,width,d.box.height);
+        const tc = document.createElement('canvas').getContext('2d');
+        tc.canvas.width = width; tc.canvas.height = d.box.height;
+        tc.putImageData(tmp,0,0);
+        tc.filter = 'blur(12px)';
+        tc.drawImage(tc.canvas,0,0);
+        ctx.drawImage(tc.canvas,x,y);
       });
     }
 
-    // Drag textOverlay
-    textOverlay.onmousedown = function(e){
-      const ox = e.offsetX, oy = e.offsetY;
-      function drag(ev){
-        textOverlay.style.left = ev.pageX - ox + 'px';
-        textOverlay.style.top = ev.pageY - oy + 'px';
-        draw();
-      }
-      document.onmousemove = drag;
-      document.onmouseup = () => { document.onmousemove = null; };
-    };
+    function zoom(f) { scale = Math.min(5, Math.max(.2, scale * f)); draw(); }
 
-    function downloadImage(){
+    function removeBG() {
+      const chroma = hexToRgb(document.getElementById('chroma').value);
+      const imgData = ctx.getImageData(0,0,canvas.width,canvas.height);
+      for(let i=0;i<imgData.data.length;i+=4){
+        if (Math.abs(imgData.data[i]-chroma.r)<60 &&
+            Math.abs(imgData.data[i+1]-chroma.g)<60 &&
+            Math.abs(imgData.data[i+2]-chroma.b)<60) {
+          imgData.data[i+3] = 0;
+        }
+      }
+      ctx.putImageData(imgData,0,0);
+    }
+
+    function hexToRgb(hex) {
+      const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+      return m ? { r: parseInt(m[1],16), g: parseInt(m[2],16), b: parseInt(m[3],16) } : {r:0,g:0,b:0};
+    }
+
+    function download() {
       const link = document.createElement('a');
       link.download = 'edited.png';
       link.href = canvas.toDataURL('image/png');
       link.click();
     }
+
+    textEl.onmousedown = e => {
+      const ox = e.offsetX, oy = e.offsetY;
+      const wrapperBox = document.getElementById('wrapper').getBoundingClientRect();
+      document.onmousemove = ev => {
+        textEl.style.left = (ev.pageX - wrapperBox.left - ox) + 'px';
+        textEl.style.top = (ev.pageY - wrapperBox.top - oy) + 'px';
+        draw();
+      };
+      document.onmouseup = () => document.onmousemove = null;
+    };
   </script>
 </body>
 </html>
