@@ -1,25 +1,32 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Photo Editor</title>
+  <meta charset="UTF-8">
+  <title>Advanced Photo Editor</title>
   <style>
-    body { font-family: sans-serif; background: #f0f0f0; padding: 20px; }
-    canvas { border: 1px solid #ccc; max-width: 100%; }
-    #controls > * { margin: 10px 5px; }
+    body { font-family: sans-serif; padding: 20px; background: #fafafa; }
+    canvas { border: 1px solid #ccc; display: block; margin: 10px 0; max-width: 100%; }
+    #controls > * { margin: 5px; }
+    .text-box {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 24px;
+      color: red;
+      cursor: move;
+      user-select: none;
+    }
+    #editorWrapper { position: relative; display: inline-block; }
   </style>
 </head>
 <body>
-  <h1>Simple Photo Editor</h1>
-  
-  <!-- Upload Image -->
-  <input type="file" id="upload" accept="image/*" />
-  <br/><br/>
+  <h1>Advanced Photo Editor</h1>
+  <input type="file" id="upload" accept="image/*"><br/>
+  <div id="editorWrapper">
+    <canvas id="canvas"></canvas>
+    <div id="textOverlay" class="text-box" contenteditable="true">Editable text</div>
+  </div>
 
-  <!-- Canvas for drawing -->
-  <canvas id="canvas" width="600" height="400"></canvas>
-
-  <!-- Controls -->
   <div id="controls">
     <label>Effect:</label>
     <select id="filter">
@@ -31,73 +38,120 @@
       <option value="contrast(1.5)">Contrast</option>
     </select>
 
-    <button onclick="rotate()">Rotate 90°</button>
+    <button onclick="rotate(-90)">Rotate Left</button>
+    <button onclick="rotate(90)">Rotate Right</button>
     <button onclick="crop()">Crop Center</button>
 
-    <br/><br/>
-    <input type="text" id="textInput" placeholder="Add text..." />
-    <button onclick="addText()">Add Text</button>
+    <button onclick="startAnimation()">Start Animation</button>
+    <button onclick="stopAnimation()">Stop Animation</button>
+
+    <button onclick="faceVolume()">Volume (Blur) Face</button>
+    <button onclick="downloadImage()">Download</button>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
   <script>
+    const upload = document.getElementById('upload');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
+    const filterSelect = document.getElementById('filter');
+    const textOverlay = document.getElementById('textOverlay');
     let img = new Image();
     let angle = 0;
+    let anim = null;
+    let animPhase = 0;
 
-    // Upload image
-    document.getElementById('upload').addEventListener('change', function (e) {
+    upload.addEventListener('change', e => {
       const reader = new FileReader();
-      reader.onload = function (event) {
-        img.onload = () => drawImage();
-        img.src = event.target.result;
+      reader.onload = ev => {
+        img.onload = () => initialize();
+        img.src = ev.target.result;
       };
       reader.readAsDataURL(e.target.files[0]);
     });
 
-    // Draw image with rotation and filter
-    function drawImage() {
+    function initialize(){
       canvas.width = img.width;
       canvas.height = img.height;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      textOverlay.style.top = '10px';
+      textOverlay.style.left = '10px';
+      draw();
+    }
 
+    function draw(){
+      ctx.clearRect(0,0,canvas.width,canvas.height);
       ctx.save();
-      ctx.translate(canvas.width / 2, canvas.height / 2);
-      ctx.rotate(angle * Math.PI / 180);
-      ctx.drawImage(img, -img.width / 2, -img.height / 2);
+      ctx.translate(canvas.width/2, canvas.height/2);
+      ctx.rotate(angle * Math.PI/180);
+      ctx.filter = filterSelect.value;
+      ctx.drawImage(img, -img.width/2, -img.height/2);
       ctx.restore();
 
-      // Apply filter
-      const filter = document.getElementById('filter').value;
-      canvas.style.filter = filter;
+      // Draw overlay text on canvas
+      const rect = textOverlay.getBoundingClientRect();
+      const wrap = canvas.getBoundingClientRect();
+      const x = rect.left - wrap.left;
+      const y = rect.top - wrap.top + parseInt(getComputedStyle(textOverlay).fontSize,10);
+      ctx.font = window.getComputedStyle(textOverlay).font;
+      ctx.fillStyle = window.getComputedStyle(textOverlay).color;
+      ctx.fillText(textOverlay.textContent, x, y);
     }
 
-    document.getElementById('filter').onchange = drawImage;
-
-    // Rotate image 90°
-    function rotate() {
-      angle = (angle + 90) % 360;
-      drawImage();
+    filterSelect.onchange = draw;
+    function rotate(deg){ angle = (angle + deg + 360) % 360; draw(); }
+    function crop(){
+      const w = canvas.width/2, h = canvas.height/2;
+      const data = ctx.getImageData(w/2, h/2, w, h);
+      canvas.width = w; canvas.height = h;
+      ctx.putImageData(data, 0,0);
+      draw(); 
     }
 
-    // Add text
-    function addText() {
-      const text = document.getElementById('textInput').value;
-      if (!text) return;
-      ctx.font = '30px Arial';
-      ctx.fillStyle = 'red';
-      ctx.fillText(text, 20, 50);
+    // Simple animation: pulsing filter
+    function animate(){
+      animPhase += 0.05;
+      filterSelect.value = `brightness(${1 + 0.1 * Math.sin(animPhase)})`;
+      draw();
+      anim = requestAnimationFrame(animate);
+    }
+    function startAnimation(){ if (!anim) animate(); }
+    function stopAnimation(){ cancelAnimationFrame(anim); anim = null; filterSelect.value = 'none'; draw(); }
+
+    // Face volume = blur detected face
+    async function faceVolume(){
+      await faceapi.nets.tinyFaceDetector.loadFromUri('models/');
+      const detections = await faceapi.detectAllFaces(canvas, new faceapi.TinyFaceDetectorOptions());
+      detections.forEach(d => {
+        const { x, y, width, height } = d.box;
+        const face = ctx.getImageData(x, y, width, height);
+        // blur with off-screen canvas
+        const tmp = document.createElement('canvas');
+        tmp.width = width; tmp.height = height;
+        const tctx = tmp.getContext('2d');
+        tctx.putImageData(face,0,0);
+        tctx.filter = 'blur(10px)';
+        tctx.drawImage(tmp, 0, 0);
+        ctx.drawImage(tmp, x, y);
+      });
     }
 
-    // Simple crop from center (50% size)
-    function crop() {
-      const w = canvas.width / 2;
-      const h = canvas.height / 2;
-      const imageData = ctx.getImageData(w / 2, h / 2, w, h);
+    // Drag textOverlay
+    textOverlay.onmousedown = function(e){
+      const ox = e.offsetX, oy = e.offsetY;
+      function drag(ev){
+        textOverlay.style.left = ev.pageX - ox + 'px';
+        textOverlay.style.top = ev.pageY - oy + 'px';
+        draw();
+      }
+      document.onmousemove = drag;
+      document.onmouseup = () => { document.onmousemove = null; };
+    };
 
-      canvas.width = w;
-      canvas.height = h;
-      ctx.putImageData(imageData, 0, 0);
+    function downloadImage(){
+      const link = document.createElement('a');
+      link.download = 'edited.png';
+      link.href = canvas.toDataURL('image/png');
+      link.click();
     }
   </script>
 </body>
