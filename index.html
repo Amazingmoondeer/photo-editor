@@ -2,81 +2,103 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>CapCut Style Editor</title>
+  <title>Photo Editor</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; background: #f0f0f0; }
-    img, video, canvas { max-width: 100%; margin-top: 10px; }
-    .controls { margin-top: 20px; }
+    body { font-family: sans-serif; background: #f0f0f0; padding: 20px; }
+    canvas { border: 1px solid #ccc; max-width: 100%; }
+    #controls > * { margin: 10px 5px; }
   </style>
 </head>
 <body>
-  <h1>CapCut-Style Photo & Video Editor</h1>
-
-  <!-- Upload Photo -->
+  <h1>Simple Photo Editor</h1>
+  
+  <!-- Upload Image -->
   <input type="file" id="upload" accept="image/*" />
-  <img id="photo" alt="Your photo will appear here" />
+  <br/><br/>
 
-  <!-- Photo Filters -->
-  <div class="controls">
-    <label for="filter">Filter:</label>
+  <!-- Canvas for drawing -->
+  <canvas id="canvas" width="600" height="400"></canvas>
+
+  <!-- Controls -->
+  <div id="controls">
+    <label>Effect:</label>
     <select id="filter">
       <option value="none">None</option>
-      <option value="grayscale(100%)">Black & White</option>
-      <option value="sepia(60%)">Vintage</option>
-      <option value="contrast(1.2) brightness(1.1)">Vivid</option>
-      <option value="saturate(2) hue-rotate(90deg)">Pop</option>
+      <option value="grayscale(100%)">Grayscale</option>
+      <option value="sepia(100%)">Sepia</option>
+      <option value="invert(1)">Invert</option>
+      <option value="brightness(1.2)">Bright</option>
+      <option value="contrast(1.5)">Contrast</option>
     </select>
-  </div>
 
-  <!-- Camera Stream -->
-  <h2>Live Camera + Retouch</h2>
-  <video id="webcam" autoplay playsinline width="300"></video>
-  <canvas id="canvas" width="300" height="225"></canvas>
+    <button onclick="rotate()">Rotate 90°</button>
+    <button onclick="crop()">Crop Center</button>
 
-  <!-- Feature Links -->
-  <div class="controls">
-    <h2>AI Editing Tools</h2>
-    <button onclick="window.open('https://www.capcut.com/tools/ai-image-outpainting', '_blank')">AI Expand</button>
-    <button onclick="window.open('https://www.capcut.com/tools/video-background-remover', '_blank')">Remove Background</button>
-    <button onclick="window.open('https://www.capcut.com/tools/ai-poster', '_blank')">AI Poster</button>
-    <button onclick="window.open('https://www.capcut.com/tools/photo-retouch', '_blank')">Retouch Face</button>
-    <button onclick="window.open('https://www.capcut.com/templates', '_blank')">CapCut Templates</button>
-    <button onclick="window.open('https://www.capcut.com/tools/auto-cut', '_blank')">Auto Cut Video</button>
+    <br/><br/>
+    <input type="text" id="textInput" placeholder="Add text..." />
+    <button onclick="addText()">Add Text</button>
   </div>
 
   <script>
-    // Photo upload + filter
-    const upload = document.getElementById('upload');
-    const photo = document.getElementById('photo');
-    upload.onchange = (e) => {
-      const reader = new FileReader();
-      reader.onload = function(event) {
-        photo.src = event.target.result;
-      };
-      reader.readAsDataURL(e.target.files[0]);
-    };
-
-    document.getElementById('filter').onchange = function () {
-      photo.style.filter = this.value;
-    };
-
-    // Camera with retouch (basic)
-    const video = document.getElementById('webcam');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
+    let img = new Image();
+    let angle = 0;
 
-    navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
-      video.srcObject = stream;
-      video.addEventListener('play', () => {
-        const draw = () => {
-          ctx.filter = 'brightness(1.1) contrast(1.2) saturate(1.3)';
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          requestAnimationFrame(draw);
-        };
-        draw();
-      });
+    // Upload image
+    document.getElementById('upload').addEventListener('change', function (e) {
+      const reader = new FileReader();
+      reader.onload = function (event) {
+        img.onload = () => drawImage();
+        img.src = event.target.result;
+      };
+      reader.readAsDataURL(e.target.files[0]);
     });
+
+    // Draw image with rotation and filter
+    function drawImage() {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.save();
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate(angle * Math.PI / 180);
+      ctx.drawImage(img, -img.width / 2, -img.height / 2);
+      ctx.restore();
+
+      // Apply filter
+      const filter = document.getElementById('filter').value;
+      canvas.style.filter = filter;
+    }
+
+    document.getElementById('filter').onchange = drawImage;
+
+    // Rotate image 90°
+    function rotate() {
+      angle = (angle + 90) % 360;
+      drawImage();
+    }
+
+    // Add text
+    function addText() {
+      const text = document.getElementById('textInput').value;
+      if (!text) return;
+      ctx.font = '30px Arial';
+      ctx.fillStyle = 'red';
+      ctx.fillText(text, 20, 50);
+    }
+
+    // Simple crop from center (50% size)
+    function crop() {
+      const w = canvas.width / 2;
+      const h = canvas.height / 2;
+      const imageData = ctx.getImageData(w / 2, h / 2, w, h);
+
+      canvas.width = w;
+      canvas.height = h;
+      ctx.putImageData(imageData, 0, 0);
+    }
   </script>
 </body>
 </html>
