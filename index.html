@@ -1,26 +1,54 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Photo Editor App</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <title>Advanced Photo Editor</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div class="editor">
-    <h1>Photo Editor</h1>
+    <h1>Advanced Photo Editor</h1>
 
-    <input type="file" id="upload" accept="image/*">
-    <canvas id="canvas"></canvas>
+    <input type="file" id="upload" accept="image/*" />
 
-    <div class="controls">
-      <label>Brightness <input type="range" id="brightness" min="0" max="200" value="100"></label>
-      <label>Contrast <input type="range" id="contrast" min="0" max="200" value="100"></label>
-      <label>Grayscale <input type="range" id="grayscale" min="0" max="100" value="0"></label>
-      <label>Sepia <input type="range" id="sepia" min="0" max="100" value="0"></label>
-      <label>Blur <input type="range" id="blur" min="0" max="10" value="0" step="0.1"></label>
+    <div class="canvas-container">
+      <canvas id="canvas"></canvas>
     </div>
 
-    <button id="download">Download Image</button>
+    <div class="controls">
+      <h3>Filters</h3>
+      <label>Brightness
+        <input type="range" id="brightness" min="0" max="200" value="100" />
+      </label>
+      <label>Contrast
+        <input type="range" id="contrast" min="0" max="200" value="100" />
+      </label>
+      <label>Grayscale
+        <input type="range" id="grayscale" min="0" max="100" value="0" />
+      </label>
+      <label>Sepia
+        <input type="range" id="sepia" min="0" max="100" value="0" />
+      </label>
+      <label>Blur
+        <input type="range" id="blur" min="0" max="10" value="0" step="0.1" />
+      </label>
+
+      <h3>Transform</h3>
+      <button id="rotate-left">⟲ Rotate Left</button>
+      <button id="rotate-right">⟳ Rotate Right</button>
+
+      <h3>Crop</h3>
+      <button id="start-crop">Start Crop</button>
+      <button id="apply-crop" disabled>Apply Crop</button>
+      <button id="cancel-crop" disabled>Cancel Crop</button>
+
+      <h3>Add Text</h3>
+      <input type="text" id="text-input" placeholder="Enter text" />
+      <button id="add-text-btn">Add Text</button>
+
+      <h3>Export</h3>
+      <button id="download">Download Image</button>
+    </div>
   </div>
 
   <script src="script.js"></script>
