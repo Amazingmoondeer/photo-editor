@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <img id="image" src="your-photo.jpg">
+  <script src="glfx.js"></script>
+  <script>
+    window.onload = () => {
+      let canvas;
+      try {
+        canvas = fx.canvas();
+      } catch (e) {
+        alert('WebGL not supported');
+        return;
+      }
+      const img = document.getElementById('image');
+      const texture = canvas.texture(img);
+      canvas.draw(texture).ink(0.25).update();
+      img.parentNode.insertBefore(canvas, img);
+      img.remove();
+    };
+  </script>
+</body>
+</html>
