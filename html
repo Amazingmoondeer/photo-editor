@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <link rel="stylesheet" href="https://unpkg.com/@pqina/pintura/pintura.css" />
+</head>
+<body>
+  <div class="my-editor" style="height:600px;"></div>
+  <script type="module">
+    import { appendDefaultEditor } from '@pqina/pintura';
+    appendDefaultEditor('.my-editor', { src: 'your-image.jpg', imageCropAspectRatio: 1 });
+  </script>
+</body>
+</html>
