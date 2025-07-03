@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <input type="file" id="file">
+  <canvas id="canvas"></canvas>
+  <select id="filter">
+    <option value="none">None</option>
+    <option value="invert">Invert</option>
+    <option value="sepia">Sepia</option>
+    <option value="sharpen">Sharpen</option>
+  </select>
+  <script src="filterous2.min.js"></script>
+  <script>
+    const f = new Filterous(document.getElementById('canvas'));
+    document.getElementById('file').onchange = e => {
+      const img = new Image();
+      img.onload = () => f.draw(img);
+      img.src = URL.createObjectURL(e.target.files[0]);
+    };
+    document.getElementById('filter').onchange = e => f.applyFilter(e.target.value);
+  </script>
+</body>
+</html>
